@@ -53,9 +53,15 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       const url = haUrl.replace(/\/+$/, "") + path;
       const requestBody = body ? Buffer.from(body, "base64") : undefined;
 
-      // Remove headers that would confuse the local HA server
+      // Remove headers that would confuse the local HA server.
+      // X-Forwarded-* headers cause HA to return 400 if the source IP
+      // is not listed in trusted_proxies.
       const fwdHeaders: Record<string, string> = { ...headers };
       delete fwdHeaders["host"];
+      delete fwdHeaders["x-forwarded-for"];
+      delete fwdHeaders["x-forwarded-proto"];
+      delete fwdHeaders["x-forwarded-host"];
+      delete fwdHeaders["x-real-ip"];
 
       try {
         const controller = new AbortController();
