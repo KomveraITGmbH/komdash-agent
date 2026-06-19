@@ -1,27 +1,26 @@
 FROM node:22-alpine AS build
-WORKDIR /repo
+WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml ./
-COPY shared/package.json shared/package.json
-COPY agent/package.json agent/package.json
+COPY package.json ./
+RUN npm install
 
-RUN corepack enable && pnpm install --filter @komdash/agent... --filter @komdash/shared
+COPY src ./src
+COPY shared/src ./shared/src
+COPY tsconfig.json ./
 
-COPY shared shared
-COPY agent agent
-
-RUN pnpm --filter @komdash/shared build && pnpm --filter @komdash/agent build
+RUN npx tsc
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-RUN apk add --no-cache util-linux
+RUN apk add --no-cache util-linux jq
 
-COPY --from=build /repo/agent/dist ./dist
-COPY --from=build /repo/agent/node_modules ./node_modules
-COPY --from=build /repo/agent/package.json ./package.json
-COPY --from=build /repo/shared ./node_modules/@komdash/shared
+COPY --from=build /app/dist ./dist
+COPY package.json ./
+RUN npm install --omit=dev
+
+COPY run.sh /run.sh
+RUN chmod +x /run.sh
 
 ENV NODE_ENV=production
-
-CMD ["node", "dist/index.js"]
+CMD ["/run.sh"]

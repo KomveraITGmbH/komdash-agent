@@ -1,17 +1,19 @@
 {
-  "name": "komdash",
-  "private": true,
+  "name": "komdash-agent",
   "version": "0.1.0",
-  "description": "KomDash - central management platform for Komvera IT GmbH",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n server,client -c blue,magenta \"pnpm --filter @komdash/server dev\" \"pnpm --filter client dev\"",
-    "build": "pnpm --filter @komdash/shared build && pnpm --filter @komdash/server build && pnpm --filter client build",
-    "db:migrate": "pnpm --filter @komdash/server db:migrate",
-    "db:seed": "pnpm --filter @komdash/server db:seed",
-    "db:generate": "pnpm --filter @komdash/server db:generate"
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
-  },
-  "packageManager": "pnpm@11.6.0"
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.7.2",
+    "zod": "^3.24.1"
+  }
 }

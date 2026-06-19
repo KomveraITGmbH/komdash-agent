@@ -12,7 +12,11 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "paths": {
+      "@komdash/shared": ["./shared/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

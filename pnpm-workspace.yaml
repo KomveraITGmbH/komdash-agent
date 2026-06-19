@@ -1,8 +1,0 @@
-packages:
-  - "client"
-  - "server"
-  - "shared"
-  - "agent"
-allowBuilds:
-  bcrypt: true
-  esbuild: true
