@@ -146,6 +146,34 @@ async function getMounts(): Promise<AgentCheckinMount[]> {
   }
 }
 
+// HA stats fetched via Supervisor API (entity/automation/device counts)
+let haStats: { entityCount: number | null; automationCount: number | null; deviceCount: number | null } = {
+  entityCount: null, automationCount: null, deviceCount: null,
+};
+
+async function refreshHaStats(): Promise<void> {
+  const token = process.env.SUPERVISOR_TOKEN;
+  if (!token) return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    const res = await fetch("http://supervisor/core/api/states", {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const states: Array<{ entity_id: string }> = await res.json();
+    haStats = {
+      entityCount: states.length,
+      automationCount: states.filter(s => s.entity_id.startsWith("automation.")).length,
+      deviceCount: states.filter(s => s.entity_id.startsWith("device_tracker.")).length,
+    };
+  } catch {
+    // Non-fatal
+  }
+}
+
 // HA detection state — refreshed every 5 minutes
 let haState = { detected: false, url: null as string | null, version: null as string | null };
 
@@ -168,6 +196,9 @@ async function collectCheckinPayload(): Promise<AgentCheckinInput> {
     haDetected: haState.detected,
     haUrl: haState.url,
     haVersion: haState.version,
+    haEntityCount: haStats.entityCount,
+    haAutomationCount: haStats.automationCount,
+    haDeviceCount: haStats.deviceCount,
   };
 }
 
@@ -217,17 +248,19 @@ const HA_DETECT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 async function main() {
   console.log(`KomDash Agent: starting, checking in every ${CHECKIN_INTERVAL_SECONDS}s to ${CHECKIN_URL}`);
 
-  // Initial HA detection before first checkin
+  // Initial HA detection and stats before first checkin
   await refreshHaDetection();
+  await refreshHaStats();
 
   // Start WebSocket tunnel (reconnects automatically)
   startTunnel(haState.url ?? "http://localhost:8123");
 
-  // Refresh HA detection every 5 minutes
+  // Refresh HA detection and stats every 5 minutes
   setInterval(() => {
     refreshHaDetection().catch((err) =>
       console.error("KomDash Agent: HA detection error:", (err as Error).message),
     );
+    refreshHaStats().catch(() => {});
   }, HA_DETECT_INTERVAL_MS);
 
   // Checkin loop

@@ -20,4 +20,7 @@ export interface AgentCheckinInput {
   haDetected?: boolean;
   haUrl?: string | null;
   haVersion?: string | null;
+  haEntityCount?: number | null;
+  haAutomationCount?: number | null;
+  haDeviceCount?: number | null;
 }
