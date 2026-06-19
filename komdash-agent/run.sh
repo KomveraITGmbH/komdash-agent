@@ -10,4 +10,4 @@ export AGENT_KEY
 export CHECKIN_INTERVAL_SECONDS="$CHECKIN_INTERVAL"
 export NODE_ENV=production
 
-exec node /app/dist/src/index.js
+exec node /app/dist/index.js

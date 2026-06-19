@@ -6,16 +6,13 @@
     "lib": ["ES2022"],
     "strict": true,
     "outDir": "dist",
+    "rootDir": "src",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowJs": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "baseUrl": ".",
-    "paths": {
-      "@komdash/shared": ["./shared/src/index.ts"]
-    }
+    "noUnusedParameters": false
   },
   "include": ["src"]
 }
