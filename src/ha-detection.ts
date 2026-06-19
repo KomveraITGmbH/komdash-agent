@@ -1,14 +1,16 @@
 /**
  * Home Assistant auto-detection.
  *
- * Probes well-known local HA URLs in order of likelihood.
- * Returns { detected: true, url, version } when found, else { detected: false }.
+ * Probes well-known local HA URLs. Accepts both 200 (older HA) and 401
+ * (newer HA that requires auth) as "HA is here" signals — the x-ha-version
+ * header is present in both cases.
  */
 
 const HA_PROBE_URLS = [
   "http://localhost:8123",
-  "http://homeassistant.local:8123",
   "http://127.0.0.1:8123",
+  "http://homeassistant.local:8123",
+  "http://homeassistant:8123",
 ];
 
 const PROBE_TIMEOUT_MS = 3_000;
@@ -30,16 +32,21 @@ async function probeHaUrl(baseUrl: string): Promise<HaDetectionResult> {
     });
     clearTimeout(timer);
 
-    if (!res.ok) return { detected: false, url: null, version: null };
-
-    // HA returns { "message": "API running." } for unauthenticated /api/
-    const body = await res.json().catch(() => null);
-    if (!body || typeof body !== "object") return { detected: false, url: null, version: null };
-
-    // Extract version from X-HA-Version header if present
+    // HA always sends x-ha-version, even on 401 (auth required)
     const version = res.headers.get("x-ha-version") ?? null;
+    if (version) {
+      return { detected: true, url: baseUrl, version };
+    }
 
-    return { detected: true, url: baseUrl, version };
+    // Older HA (pre-2021) returns 200 with { message: "API running." }
+    if (res.ok) {
+      const body = await res.json().catch(() => null);
+      if (body && typeof body === "object") {
+        return { detected: true, url: baseUrl, version: null };
+      }
+    }
+
+    return { detected: false, url: null, version: null };
   } catch {
     clearTimeout(timer);
     return { detected: false, url: null, version: null };
