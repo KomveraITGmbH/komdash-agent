@@ -1,0 +1,17 @@
+{
+  "name": "komdash",
+  "private": true,
+  "version": "0.1.0",
+  "description": "KomDash - central management platform for Komvera IT GmbH",
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,magenta \"pnpm --filter @komdash/server dev\" \"pnpm --filter client dev\"",
+    "build": "pnpm --filter @komdash/shared build && pnpm --filter @komdash/server build && pnpm --filter client build",
+    "db:migrate": "pnpm --filter @komdash/server db:migrate",
+    "db:seed": "pnpm --filter @komdash/server db:seed",
+    "db:generate": "pnpm --filter @komdash/server db:generate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "packageManager": "pnpm@11.6.0"
+}
