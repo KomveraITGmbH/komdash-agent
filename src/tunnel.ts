@@ -50,7 +50,11 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         body: string | null;
       };
 
-      const url = haUrl.replace(/\/+$/, "") + path;
+      // Supervisor ingress paths must be routed to the Supervisor, not HA Core
+      const base = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
+        ? "http://supervisor"
+        : haUrl.replace(/\/+$/, "");
+      const url = base + path;
       const requestBody = body ? Buffer.from(body, "base64") : undefined;
 
       // Remove headers that would confuse the local HA server.
@@ -109,7 +113,10 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         headers: Record<string, string>;
       };
 
-      const wsUrl = haUrl.replace(/^http/, "ws").replace(/\/+$/, "") + path;
+      const wsBase = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
+        ? "ws://supervisor"
+        : haUrl.replace(/^http/, "ws").replace(/\/+$/, "");
+      const wsUrl = wsBase + path;
       const fwdHeaders: Record<string, string> = { ...headers };
       delete fwdHeaders["host"];
       delete fwdHeaders["origin"];
