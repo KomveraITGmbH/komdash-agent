@@ -12,7 +12,7 @@ arch:
 init: false
 host_network: true
 options:
-  komdash_url: "https://komdash.example.com"
+  komdash_url: "https://dash.komvera.de"
   agent_key: ""
   checkin_interval: 60
 schema:
