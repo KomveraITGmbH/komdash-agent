@@ -176,7 +176,8 @@ async function sendCheckin(payload: AgentCheckinInput): Promise<void> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${AGENT_KEY}`,
+      "Authorization": `Bearer ${AGENT_KEY}`,
+      "User-Agent": "KomDash-Agent/1.0",
     },
     body: JSON.stringify(payload),
   });
