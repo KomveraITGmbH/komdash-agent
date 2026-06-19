@@ -1,13 +1,9 @@
 /**
  * Home Assistant auto-detection.
  *
- * Tries multiple known HA endpoints including all local host IPs.
- * With host_network:true the add-on shares the host's network namespace,
- * so probing the host's own IPs (e.g. 192.168.x.x:8123) is the most
- * reliable way to reach HA Core in HA OS.
+ * Without host_network the add-on runs on the hassio Docker network where
+ * "homeassistant" resolves directly to HA Core — no manual config needed.
  */
-
-import os from "node:os";
 
 const PROBE_TIMEOUT_MS = 3_000;
 
@@ -15,18 +11,6 @@ interface HaDetectionResult {
   detected: boolean;
   url: string | null;
   version: string | null;
-}
-
-function getLocalIps(): string[] {
-  const ips: string[] = [];
-  for (const entries of Object.values(os.networkInterfaces())) {
-    for (const entry of entries ?? []) {
-      if (entry.family === "IPv4" && !entry.internal) {
-        ips.push(entry.address);
-      }
-    }
-  }
-  return ips;
 }
 
 async function probeHaUrl(baseUrl: string, token?: string): Promise<HaDetectionResult> {
@@ -57,39 +41,19 @@ async function probeHaUrl(baseUrl: string, token?: string): Promise<HaDetectionR
   }
 }
 
+const HA_PROBE_URLS = [
+  "http://homeassistant:8123",       // hassio Docker network (primary, no host_network needed)
+  "http://supervisor/core",          // Supervisor proxy
+  "http://localhost:8123",
+  "http://127.0.0.1:8123",
+  "http://homeassistant.local:8123",
+];
+
 export async function detectHomeAssistant(): Promise<HaDetectionResult> {
   const supervisorToken = process.env.SUPERVISOR_TOKEN;
 
-  // Build probe list — local IPs first (most reliable with host_network:true)
-  const localIpUrls = getLocalIps().map((ip) => `http://${ip}:8123`);
-
-  const probeUrls = [
-    ...localIpUrls,
-    "http://172.30.32.2:8123",       // HA Core on hassio bridge (host_network)
-    "http://localhost:8123",
-    "http://127.0.0.1:8123",
-    "http://homeassistant.local:8123",
-    "http://homeassistant:8123",
-    "http://hassio.local:8123",
-  ];
-
-  // Try supervisor proxy first if token is available
-  if (supervisorToken) {
-    for (const supervisorUrl of [
-      "http://172.30.32.1/core",
-      "http://supervisor/core",
-    ]) {
-      const result = await probeHaUrl(supervisorUrl, supervisorToken);
-      if (result.detected) {
-        const haUrl = localIpUrls[0] ?? "http://homeassistant.local:8123";
-        console.log(`KomDash Agent: Home Assistant detected via Supervisor (version: ${result.version ?? "unknown"}), using ${haUrl}`);
-        return { ...result, url: haUrl };
-      }
-    }
-  }
-
-  for (const url of probeUrls) {
-    const result = await probeHaUrl(url);
+  for (const url of HA_PROBE_URLS) {
+    const result = await probeHaUrl(url, supervisorToken);
     if (result.detected) {
       console.log(`KomDash Agent: Home Assistant detected at ${url} (version: ${result.version ?? "unknown"})`);
       return result;
