@@ -1,8 +1,8 @@
 import os from "node:os";
 import { execFile } from "node:child_process";
 import type { AgentCheckinInput, AgentCheckinMount, MountKind } from "./types.js";
-import { detectHomeAssistant } from "./ha-detection";
-import { startTunnel } from "./tunnel";
+import { detectHomeAssistant } from "./ha-detection.js";
+import { startTunnel } from "./tunnel.js";
 
 const KOMDASH_URL = process.env.KOMDASH_URL;
 const AGENT_KEY = process.env.AGENT_KEY;
