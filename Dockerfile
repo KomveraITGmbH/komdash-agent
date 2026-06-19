@@ -5,7 +5,6 @@ COPY package.json ./
 RUN npm install
 
 COPY src ./src
-COPY shared/src ./shared/src
 COPY tsconfig.json ./
 
 RUN npx tsc

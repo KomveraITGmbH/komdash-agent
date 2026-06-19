@@ -1,6 +1,6 @@
 import os from "node:os";
 import { execFile } from "node:child_process";
-import type { AgentCheckinInput, AgentCheckinMount, MountKind } from "@komdash/shared";
+import type { AgentCheckinInput, AgentCheckinMount, MountKind } from "./types.js";
 import { detectHomeAssistant } from "./ha-detection";
 import { startTunnel } from "./tunnel";
 
