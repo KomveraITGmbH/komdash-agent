@@ -146,14 +146,24 @@ async function getMounts(): Promise<AgentCheckinMount[]> {
   }
 }
 
-// HA stats fetched via Supervisor API (entity/automation/device counts)
-let haStats: { entityCount: number | null; automationCount: number | null; deviceCount: number | null } = {
-  entityCount: null, automationCount: null, deviceCount: null,
+// HA stats fetched via Supervisor API
+let haStats: {
+  entityCount: number | null;
+  automationCount: number | null;
+  deviceCount: number | null;
+  backupStatus: "ok" | "warning" | "failed" | "unknown";
+} = {
+  entityCount: null,
+  automationCount: null,
+  deviceCount: null,
+  backupStatus: "unknown",
 };
 
 async function refreshHaStats(): Promise<void> {
   const token = process.env.SUPERVISOR_TOKEN;
   if (!token) return;
+
+  // Entity / automation / device counts via HA Core states API
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
@@ -162,15 +172,54 @@ async function refreshHaStats(): Promise<void> {
       signal: controller.signal,
     });
     clearTimeout(timer);
-    if (!res.ok) return;
-    const states: Array<{ entity_id: string }> = await res.json();
-    haStats = {
-      entityCount: states.length,
-      automationCount: states.filter(s => s.entity_id.startsWith("automation.")).length,
-      deviceCount: states.filter(s => s.entity_id.startsWith("device_tracker.")).length,
-    };
+    if (res.ok) {
+      const states: Array<{ entity_id: string; attributes?: { device_id?: string } }> = await res.json();
+      // Count unique device_ids from entity attributes as actual device count
+      const deviceIds = new Set(
+        states
+          .map(s => s.attributes?.device_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0),
+      );
+      haStats = {
+        ...haStats,
+        entityCount: states.length,
+        automationCount: states.filter(s => s.entity_id.startsWith("automation.")).length,
+        deviceCount: deviceIds.size > 0 ? deviceIds.size : null,
+      };
+    }
   } catch {
     // Non-fatal
+  }
+
+  // Backup status via Supervisor API
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    const res = await fetch("http://supervisor/backups", {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const body: { data?: { backups?: Array<{ date: string }> } } = await res.json();
+      const backups = body?.data?.backups ?? [];
+      if (backups.length === 0) {
+        haStats = { ...haStats, backupStatus: "warning" };
+      } else {
+        // Warn if the newest backup is older than 7 days
+        const newest = backups
+          .map(b => new Date(b.date).getTime())
+          .filter(t => !isNaN(t))
+          .sort((a, b) => b - a)[0];
+        const ageMs = newest ? Date.now() - newest : Infinity;
+        haStats = {
+          ...haStats,
+          backupStatus: ageMs < 7 * 24 * 60 * 60 * 1000 ? "ok" : "warning",
+        };
+      }
+    }
+  } catch {
+    // Supervisor backup API not available — keep previous status
   }
 }
 
@@ -199,6 +248,7 @@ async function collectCheckinPayload(): Promise<AgentCheckinInput> {
     haEntityCount: haStats.entityCount,
     haAutomationCount: haStats.automationCount,
     haDeviceCount: haStats.deviceCount,
+    haBackupStatus: haStats.backupStatus,
   };
 }
 

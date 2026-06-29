@@ -23,4 +23,5 @@ export interface AgentCheckinInput {
   haEntityCount?: number | null;
   haAutomationCount?: number | null;
   haDeviceCount?: number | null;
+  haBackupStatus?: "ok" | "warning" | "failed" | "unknown" | null;
 }
