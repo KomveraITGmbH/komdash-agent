@@ -1,6 +1,6 @@
 name: KomDash Agent
 description: Monitoring agent for KomDash - reports system metrics and proxies Home Assistant access.
-version: "0.1.7"
+version: "0.1.8"
 slug: komdash_agent
 url: https://github.com/KomveraITGmbH/komdash-agent
 arch:
@@ -11,6 +11,7 @@ arch:
   - i386
 init: false
 hassio_api: true
+homeassistant_api: true
 options:
   komdash_url: "https://dash.komvera.de"
   agent_key: ""
