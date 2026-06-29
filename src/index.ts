@@ -179,23 +179,41 @@ async function refreshHaStats(): Promise<void> {
     clearTimeout(timer);
     if (res.ok) {
       const states: Array<{ entity_id: string; attributes?: { device_id?: string } }> = await res.json();
-      const deviceIds = new Set(
-        states
-          .map(s => s.attributes?.device_id)
-          .filter((id): id is string => typeof id === "string" && id.length > 0),
-      );
       haStats = {
         ...haStats,
         entityCount: states.length,
         automationCount: states.filter(s => s.entity_id.startsWith("automation.")).length,
-        deviceCount: deviceIds.size > 0 ? deviceIds.size : null,
       };
-      console.log(`KomDash Agent: HA stats — entities: ${haStats.entityCount}, automations: ${haStats.automationCount}, devices: ${haStats.deviceCount}`);
+      console.log(`KomDash Agent: HA stats — entities: ${haStats.entityCount}, automations: ${haStats.automationCount}`);
     } else {
       console.warn(`KomDash Agent: HA states API returned ${res.status}`);
     }
   } catch (err) {
     console.warn("KomDash Agent: HA states fetch failed:", (err as Error).message);
+  }
+
+  // Device count via HA template API
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    const res = await fetch("http://supervisor/core/api/template", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ template: "{{ states | map(attribute='entity_id') | map('regex_replace', '\\..*', '') | unique | list | count }}" }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const count = parseInt(await res.text(), 10);
+      if (!isNaN(count) && count > 0) {
+        haStats = { ...haStats, deviceCount: count };
+        console.log(`KomDash Agent: device domains: ${count}`);
+      }
+    } else {
+      console.warn(`KomDash Agent: template API returned ${res.status}`);
+    }
+  } catch (err) {
+    console.warn("KomDash Agent: template fetch failed:", (err as Error).message);
   }
 
   // Backup status via Supervisor API
@@ -212,21 +230,22 @@ async function refreshHaStats(): Promise<void> {
       const backups = body?.data?.backups ?? [];
       if (backups.length === 0) {
         haStats = { ...haStats, backupStatus: "warning" };
+        console.log("KomDash Agent: no backups found");
       } else {
-        // Warn if the newest backup is older than 7 days
         const newest = backups
           .map(b => new Date(b.date).getTime())
           .filter(t => !isNaN(t))
           .sort((a, b) => b - a)[0];
         const ageMs = newest ? Date.now() - newest : Infinity;
-        haStats = {
-          ...haStats,
-          backupStatus: ageMs < 7 * 24 * 60 * 60 * 1000 ? "ok" : "warning",
-        };
+        const status = ageMs < 7 * 24 * 60 * 60 * 1000 ? "ok" : "warning";
+        haStats = { ...haStats, backupStatus: status };
+        console.log(`KomDash Agent: backup status: ${status}, count: ${backups.length}`);
       }
+    } else {
+      console.warn(`KomDash Agent: backup API returned ${res.status}`);
     }
-  } catch {
-    // Supervisor backup API not available — keep previous status
+  } catch (err) {
+    console.warn("KomDash Agent: backup fetch failed:", (err as Error).message);
   }
 }
 
