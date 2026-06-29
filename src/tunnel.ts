@@ -50,8 +50,10 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         body: string | null;
       };
 
-      // Supervisor ingress paths must be routed to the Supervisor, not HA Core
-      const base = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
+      // /api/hassio_ingress/ → Supervisor directly (authenticated via ingress_session cookie)
+      // Everything else including /api/hassio/ → HA Core, which validates the Bearer token
+      // and proxies to the Supervisor with its own SUPERVISOR_TOKEN
+      const base = path.startsWith("/api/hassio_ingress")
         ? "http://supervisor"
         : haUrl.replace(/\/+$/, "");
       const url = base + path;
@@ -113,7 +115,7 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         headers: Record<string, string>;
       };
 
-      const wsBase = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
+      const wsBase = path.startsWith("/api/hassio_ingress")
         ? "ws://supervisor"
         : haUrl.replace(/^http/, "ws").replace(/\/+$/, "");
       const wsUrl = wsBase + path;
