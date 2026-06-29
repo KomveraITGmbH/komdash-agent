@@ -105,19 +105,19 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       delete fwdHeaders["x-forwarded-host"];
       delete fwdHeaders["x-real-ip"];
 
-      // Supervisor ingress requires a valid ingress_session cookie.
-      // The browser may not have it yet (race condition on first load) or
-      // the cookie path may differ from the tunnel path. We inject a fresh
-      // session from the Supervisor API so the request always succeeds.
+      // Supervisor ingress requires a valid ingress_session cookie (UUID4 hex, 32 chars).
+      // The browser may send a wrong session (e.g. a long HA auth token captured by the
+      // WS interceptor). We always override with a fresh session from the Supervisor API.
       if (path.startsWith("/api/hassio_ingress")) {
-        const existingCookie = fwdHeaders["cookie"] ?? "";
-        if (!existingCookie.includes("ingress_session=")) {
-          const session = await getIngressSession();
-          if (session) {
-            fwdHeaders["cookie"] = existingCookie
-              ? `${existingCookie}; ingress_session=${session}`
-              : `ingress_session=${session}`;
-          }
+        const session = await getIngressSession();
+        if (session) {
+          const stripped = (fwdHeaders["cookie"] ?? "")
+            .split("; ")
+            .filter((c) => !c.startsWith("ingress_session="))
+            .join("; ");
+          fwdHeaders["cookie"] = stripped
+            ? `${stripped}; ingress_session=${session}`
+            : `ingress_session=${session}`;
         }
       }
 
