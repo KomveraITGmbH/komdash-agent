@@ -50,11 +50,8 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         body: string | null;
       };
 
-      // /api/hassio_ingress/ → Supervisor directly (auth via ingress_session cookie)
-      // /api/hassio/...     → HA Core (user Bearer token → HA Core validates → Supervisor)
-      // /api/ingress/...    → HA Core (same reason)
-      // Everything else     → HA Core at haUrl
-      const base = path.startsWith("/api/hassio_ingress")
+      // Supervisor ingress paths must be routed to the Supervisor, not HA Core
+      const base = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
         ? "http://supervisor"
         : haUrl.replace(/\/+$/, "");
       const url = base + path;
@@ -116,7 +113,7 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
         headers: Record<string, string>;
       };
 
-      const wsBase = path.startsWith("/api/hassio_ingress")
+      const wsBase = path.startsWith("/api/hassio") || path.startsWith("/api/ingress")
         ? "ws://supervisor"
         : haUrl.replace(/^http/, "ws").replace(/\/+$/, "");
       const wsUrl = wsBase + path;
@@ -124,14 +121,8 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       delete fwdHeaders["host"];
       delete fwdHeaders["origin"];
 
-      // Pass sec-websocket-protocol as the WebSocket protocol argument (not as an HTTP header).
-      // Required for add-ons like ttyd that use the "tty" subprotocol.
-      const protocol = fwdHeaders["sec-websocket-protocol"];
-      delete fwdHeaders["sec-websocket-protocol"];
-      const protocols = protocol ? protocol.split(",").map((s) => s.trim()) : [];
-
       try {
-        const haWs = new WebSocket(wsUrl, protocols, { headers: fwdHeaders });
+        const haWs = new WebSocket(wsUrl, { headers: fwdHeaders });
 
         haWs.on("open", () => {
           activeChannels.set(channelId, haWs);
