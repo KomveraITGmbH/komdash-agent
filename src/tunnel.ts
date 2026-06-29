@@ -25,6 +25,42 @@ const MAX_BACKOFF_MS = 60_000;
 const activeChannels = new Map<string, WebSocket>();
 
 // ---------------------------------------------------------------------------
+// Ingress session cache — avoids calling validate_session for every request.
+// The Supervisor's ingress sessions last ~30 minutes; we refresh at 25 min.
+// ---------------------------------------------------------------------------
+
+const INGRESS_SESSION_TTL_MS = 25 * 60 * 1000;
+let _ingressSession: { token: string; expiresAt: number } | null = null;
+
+async function getIngressSession(): Promise<string | null> {
+  const supervisorToken = process.env.SUPERVISOR_TOKEN;
+  if (!supervisorToken) return null;
+
+  if (_ingressSession && Date.now() < _ingressSession.expiresAt) {
+    return _ingressSession.token;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5_000);
+    const res = await fetch("http://supervisor/ingress/validate_session", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${supervisorToken}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const body: { result?: string; data?: { session?: string }; session?: string } = await res.json();
+    const token = body?.data?.session ?? body?.session ?? null;
+    if (typeof token === "string" && token.length > 0) {
+      _ingressSession = { token, expiresAt: Date.now() + INGRESS_SESSION_TTL_MS };
+      return token;
+    }
+  } catch {}
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Handle messages from the KomDash relay server
 // ---------------------------------------------------------------------------
 
@@ -68,6 +104,22 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       delete fwdHeaders["x-forwarded-proto"];
       delete fwdHeaders["x-forwarded-host"];
       delete fwdHeaders["x-real-ip"];
+
+      // Supervisor ingress requires a valid ingress_session cookie.
+      // The browser may not have it yet (race condition on first load) or
+      // the cookie path may differ from the tunnel path. We inject a fresh
+      // session from the Supervisor API so the request always succeeds.
+      if (path.startsWith("/api/hassio_ingress")) {
+        const existingCookie = fwdHeaders["cookie"] ?? "";
+        if (!existingCookie.includes("ingress_session=")) {
+          const session = await getIngressSession();
+          if (session) {
+            fwdHeaders["cookie"] = existingCookie
+              ? `${existingCookie}; ingress_session=${session}`
+              : `ingress_session=${session}`;
+          }
+        }
+      }
 
       try {
         const controller = new AbortController();
