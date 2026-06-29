@@ -122,9 +122,21 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       const fwdHeaders: Record<string, string> = { ...headers };
       delete fwdHeaders["host"];
       delete fwdHeaders["origin"];
+      // Remove HTTP upgrade handshake headers — the ws library generates these automatically.
+      // Forwarding them results in duplicate headers and can cause the HA/Supervisor handshake to fail.
+      delete fwdHeaders["sec-websocket-key"];
+      delete fwdHeaders["sec-websocket-extensions"];
+      delete fwdHeaders["sec-websocket-version"];
+
+      // Pass Sec-WebSocket-Protocol as the protocols argument so the ws library
+      // handles negotiation correctly instead of treating it as a raw header.
+      const wsProtocols = fwdHeaders["sec-websocket-protocol"]
+        ? fwdHeaders["sec-websocket-protocol"].split(",").map((p) => p.trim())
+        : undefined;
+      delete fwdHeaders["sec-websocket-protocol"];
 
       try {
-        const haWs = new WebSocket(wsUrl, { headers: fwdHeaders });
+        const haWs = new WebSocket(wsUrl, wsProtocols, { headers: fwdHeaders });
 
         haWs.on("open", () => {
           activeChannels.set(channelId, haWs);
