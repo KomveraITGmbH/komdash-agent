@@ -161,7 +161,12 @@ let haStats: {
 
 async function refreshHaStats(): Promise<void> {
   const token = process.env.SUPERVISOR_TOKEN;
-  if (!token) return;
+  if (!token) {
+    console.log("KomDash Agent: SUPERVISOR_TOKEN not available, skipping HA stats");
+    return;
+  }
+
+  console.log("KomDash Agent: fetching HA stats via Supervisor API...");
 
   // Entity / automation / device counts via HA Core states API
   try {
@@ -174,7 +179,6 @@ async function refreshHaStats(): Promise<void> {
     clearTimeout(timer);
     if (res.ok) {
       const states: Array<{ entity_id: string; attributes?: { device_id?: string } }> = await res.json();
-      // Count unique device_ids from entity attributes as actual device count
       const deviceIds = new Set(
         states
           .map(s => s.attributes?.device_id)
@@ -186,9 +190,12 @@ async function refreshHaStats(): Promise<void> {
         automationCount: states.filter(s => s.entity_id.startsWith("automation.")).length,
         deviceCount: deviceIds.size > 0 ? deviceIds.size : null,
       };
+      console.log(`KomDash Agent: HA stats — entities: ${haStats.entityCount}, automations: ${haStats.automationCount}, devices: ${haStats.deviceCount}`);
+    } else {
+      console.warn(`KomDash Agent: HA states API returned ${res.status}`);
     }
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    console.warn("KomDash Agent: HA states fetch failed:", (err as Error).message);
   }
 
   // Backup status via Supervisor API
