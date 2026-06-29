@@ -121,8 +121,14 @@ async function handleMessage(raw: string, send: (msg: object) => void, haUrl: st
       delete fwdHeaders["host"];
       delete fwdHeaders["origin"];
 
+      // Pass sec-websocket-protocol as the WebSocket protocol argument (not as an HTTP header).
+      // Required for add-ons like ttyd that use the "tty" subprotocol.
+      const protocol = fwdHeaders["sec-websocket-protocol"];
+      delete fwdHeaders["sec-websocket-protocol"];
+      const protocols = protocol ? protocol.split(",").map((s) => s.trim()) : [];
+
       try {
-        const haWs = new WebSocket(wsUrl, { headers: fwdHeaders });
+        const haWs = new WebSocket(wsUrl, protocols, { headers: fwdHeaders });
 
         haWs.on("open", () => {
           activeChannels.set(channelId, haWs);
